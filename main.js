@@ -264,6 +264,15 @@ app.on('ready', () => {
       case consts.eventNames.windowCmdMaximize:
         elements[json.targetID].maximize()
         break
+      case consts.eventNames.windowCmdIsMaximized:
+        let is = elements[json.targetID].isMaximized()
+            client.write(json.targetID, 
+                consts.eventNames.windowEventIsMaximized, {
+                    "windowOptions": {
+                        "maximized": is
+                    }
+                })
+        break
       case consts.eventNames.windowCmdSetFullscreen:
         elements[json.targetID].setFullScreen(json.windowOptions.fullscreen)
         break
