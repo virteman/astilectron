@@ -1,7 +1,7 @@
 'use strict'
 
 const electron = require('electron')
-const { app, BrowserWindow, ipcMain, Menu, MenuItem, Tray, dialog, Notification } = electron
+const { app, BrowserWindow, BrowserView, ipcMain, Menu, MenuItem, Tray, dialog, Notification } = electron
 const consts = require('./src/consts.js')
 const client = require('./src/client.js').init()
 const rl = require('readline').createInterface({ input: client.socket })
@@ -248,6 +248,9 @@ app.on('ready', () => {
       case consts.eventNames.windowCmdCreate:
         windowCreate(json)
         break
+      case consts.eventNames.windowCmdCreateBrowserView:
+        windowViewCreate(json)
+        break
       case consts.eventNames.windowCmdDestroy:
         elements[json.targetID].destroy()
         elements[json.targetID] = null
@@ -295,6 +298,21 @@ app.on('ready', () => {
         break
       case consts.eventNames.windowCmdResize:
         elements[json.targetID].setSize(json.windowOptions.width, json.windowOptions.height, true)
+        break
+      case consts.eventNames.windowCmdSetBounds:
+        elements[json.targetID].setBounds(json.bounds, true)
+        client.write(json.targetID, consts.eventNames.windowEventSetBounds) 
+        break
+      case consts.eventNames.windowCmdSetAutoResize:
+        elements[json.targetID].setAutoResize(json.autoResizeOptions, true)
+        client.write(json.targetID, consts.eventNames.windowEventSetAutoResize) 
+        break
+      case consts.eventNames.windowCmdGetBounds:
+        let bounds = elements[json.targetID].getBounds()
+        client.write(json.targetID, 
+            consts.eventNames.windowEventGetBounds, {
+                "bounds": bounds
+            })
         break
       case consts.eventNames.windowCmdRestore:
         elements[json.targetID].restore()
@@ -416,6 +434,110 @@ function windowCreate (json) {
   }
 }
 
+// when create window or create browser view finishes
+function windowOrViewCreateFinish (json) {
+  elements[json.targetID].webContents.on('did-finish-load', () => {
+    elements[json.targetID].webContents.executeJavaScript(`(function() {
+      const {ipcRenderer} = asRequire('electron')
+      const {dialog} = asRequire('electron').remote
+      window.astilectron = {
+        onMessageOnce: false,
+        onMessage: function(callback) {
+            if (astilectron.onMessageOnce) {
+                return
+            }
+            ipcRenderer.on('` + consts.eventNames.ipcCmdMessage + `', function(event, message) {
+                let v = callback(message.message)
+                if (typeof message.callbackId !== "undefined") {
+                    let e = {callbackId: message.callbackId, targetID: '` + json.targetID + `'}
+                    if (typeof v !== "undefined") e.message = v
+                    ipcRenderer.send('` + consts.eventNames.ipcEventMessageCallback + `', e)
+                }
+            })
+            astilectron.onMessageOnce = true
+        },
+        callbacks: {},
+        counters: {},
+        registerCallback: function(k, e, c, n) {
+            e.targetID = '` + json.targetID + `';
+            if (typeof c !== "undefined") {
+                if (typeof astilectron.counters[k] === "undefined") {
+                    astilectron.counters[k] = 1;
+                }
+                e.callbackId = String(astilectron.counters[k]++);
+                if (typeof astilectron.callbacks[k] === "undefined") {
+                    astilectron.callbacks[k] = {};
+                }
+                astilectron.callbacks[k][e.callbackId] = c;
+            }
+            ipcRenderer.send(n, e);
+        },
+        executeCallback: function(k, message, args) {
+            if (typeof astilectron.callbacks[k][message.callbackId] !== "undefined") {
+                astilectron.callbacks[k][message.callbackId].apply(null, args);
+            }
+        },
+        sendMessage: function(message, callback) {
+            astilectron.registerCallback('` + consts.callbackNames.webContentsMessage + `', {message: message}, callback, '` + consts.eventNames.ipcEventMessage + `');
+        },
+        showErrorBox: function(title, content) {
+            dialog.showErrorBox(title, content)
+        },
+        showMessageBox: function(options, callback) {
+            dialog.showMessageBox(null, options, callback)
+        },
+        showOpenDialog: function(options, callback) {
+            dialog.showOpenDialog(null, options, callback)
+        },
+        showSaveDialog: function(options, callback) {
+            dialog.showSaveDialog(null, options, callback)
+        }
+      };
+      ipcRenderer.on('` + consts.eventNames.ipcCmdMessageCallback + `', function(event, message) {
+          astilectron.executeCallback('` + consts.callbackNames.webContentsMessage + `', message, [message.message]);
+      });
+      ipcRenderer.on('` + consts.eventNames.ipcCmdLog + `', function(event, message) {
+          console.log(message)
+      });
+      ` + ( typeof json.windowOptions.custom !== 'undefined' && 
+      typeof json.windowOptions.custom.script !== 'undefined' 
+      ? json.windowOptions.custom.script 
+      : '' ) + `
+      document.dispatchEvent(new Event('astilectron-ready'))
+      })()`)
+    sessionCreate(elements[json.targetID].webContents, json.sessionId)
+    client.write(json.targetID, consts.eventNames.windowEventDidFinishLoad)
+  })
+  elements[json.targetID].webContents.on('did-get-redirect-request', (event, oldUrl, newUrl) => {
+    client.write(json.targetID, consts.eventNames.windowEventDidGetRedirectRequest, {
+      newUrl: newUrl,
+      oldUrl: oldUrl
+    })
+  })
+  elements[json.targetID].webContents.on('login', (event, request, authInfo, callback) => {
+    event.preventDefault()
+    registerCallback(json, consts.callbackNames.webContentsLogin, { authInfo: authInfo, request: request }, consts.eventNames.webContentsEventLogin, callback)
+  })
+  elements[json.targetID].webContents.on('will-navigate', (event, url) => {
+    client.write(json.targetID, consts.eventNames.windowEventWillNavigate, {
+      url: url
+    })
+  })
+  // when new window( a link target _blank or window.open
+  elements[json.targetID].webContents.on('new-window', (event, url) => {
+    event.preventDefault()
+    const win = new BrowserWindow({ show: false })
+    win.once('ready-to-show', () => win.show())
+    win.loadURL(url)
+    event.newGuest = win
+    /*
+    client.write(json.targetID, consts.eventNames.windowEventWillNavigate, {
+      url: url
+    })
+    */
+  })
+}
+
 // windowCreateFinish finishes creating a new window
 function windowCreateFinish (json) {
   elements[json.targetID].setMenu(null)
@@ -467,94 +589,39 @@ function windowCreateFinish (json) {
   elements[json.targetID].on('show', () => { client.write(json.targetID, consts.eventNames.windowEventShow) })
   elements[json.targetID].on('unmaximize', () => { client.write(json.targetID, consts.eventNames.windowEventUnmaximize) })
   elements[json.targetID].on('unresponsive', () => { client.write(json.targetID, consts.eventNames.windowEventUnresponsive) })
-  elements[json.targetID].webContents.on('did-finish-load', () => {
-  elements[json.targetID].webContents.executeJavaScript(`(function() {
-    const {ipcRenderer} = asRequire('electron')
-    const {dialog} = asRequire('electron').remote
-    window.astilectron = {
-      onMessageOnce: false,
-      onMessage: function(callback) {
-          if (astilectron.onMessageOnce) {
-              return
-          }
-          ipcRenderer.on('` + consts.eventNames.ipcCmdMessage + `', function(event, message) {
-              let v = callback(message.message)
-              if (typeof message.callbackId !== "undefined") {
-                  let e = {callbackId: message.callbackId, targetID: '` + json.targetID + `'}
-                  if (typeof v !== "undefined") e.message = v
-                  ipcRenderer.send('` + consts.eventNames.ipcEventMessageCallback + `', e)
-              }
-          })
-          astilectron.onMessageOnce = true
-      },
-      callbacks: {},
-      counters: {},
-      registerCallback: function(k, e, c, n) {
-          e.targetID = '` + json.targetID + `';
-          if (typeof c !== "undefined") {
-              if (typeof astilectron.counters[k] === "undefined") {
-                  astilectron.counters[k] = 1;
-              }
-              e.callbackId = String(astilectron.counters[k]++);
-              if (typeof astilectron.callbacks[k] === "undefined") {
-                  astilectron.callbacks[k] = {};
-              }
-              astilectron.callbacks[k][e.callbackId] = c;
-          }
-          ipcRenderer.send(n, e);
-      },
-      executeCallback: function(k, message, args) {
-          if (typeof astilectron.callbacks[k][message.callbackId] !== "undefined") {
-              astilectron.callbacks[k][message.callbackId].apply(null, args);
-          }
-      },
-      sendMessage: function(message, callback) {
-          astilectron.registerCallback('` + consts.callbackNames.webContentsMessage + `', {message: message}, callback, '` + consts.eventNames.ipcEventMessage + `');
-      },
-      showErrorBox: function(title, content) {
-          dialog.showErrorBox(title, content)
-      },
-      showMessageBox: function(options, callback) {
-          dialog.showMessageBox(null, options, callback)
-      },
-      showOpenDialog: function(options, callback) {
-          dialog.showOpenDialog(null, options, callback)
-      },
-      showSaveDialog: function(options, callback) {
-          dialog.showSaveDialog(null, options, callback)
-      }
-    };
-    ipcRenderer.on('` + consts.eventNames.ipcCmdMessageCallback + `', function(event, message) {
-        astilectron.executeCallback('` + consts.callbackNames.webContentsMessage + `', message, [message.message]);
-    });
-    ipcRenderer.on('` + consts.eventNames.ipcCmdLog + `', function(event, message) {
-        console.log(message)
-    });
-    ` + ( typeof json.windowOptions.custom !== 'undefined' && 
-    typeof json.windowOptions.custom.script !== 'undefined' 
-    ? json.windowOptions.custom.script 
-    : '' ) + `
-    document.dispatchEvent(new Event('astilectron-ready'))
-    })()`)
-    sessionCreate(elements[json.targetID].webContents, json.sessionId)
-    client.write(json.targetID, consts.eventNames.windowEventDidFinishLoad)
-  })
-  elements[json.targetID].webContents.on('did-get-redirect-request', (event, oldUrl, newUrl) => {
-    client.write(json.targetID, consts.eventNames.windowEventDidGetRedirectRequest, {
-      newUrl: newUrl,
-      oldUrl: oldUrl
-    })
-  })
-  elements[json.targetID].webContents.on('login', (event, request, authInfo, callback) => {
-    event.preventDefault()
-    registerCallback(json, consts.callbackNames.webContentsLogin, { authInfo: authInfo, request: request }, consts.eventNames.webContentsEventLogin, callback)
-  })
-  elements[json.targetID].webContents.on('will-navigate', (event, url) => {
-    client.write(json.targetID, consts.eventNames.windowEventWillNavigate, {
-      url: url
-    })
-  })
+  //
+  windowOrViewCreateFinish(json)
   lastWindow = elements[json.targetID]
+}
+
+// windowViewCreate creates a new browserview
+function windowViewCreate (json) {
+  if (!json.windowOptions.browserView || 
+      elements[json.windowOptions.parentID] == null ) {
+      return windowCreate()
+  }
+  //create browserview
+  elements[json.targetID] = new BrowserView(json.windowOptions)
+  //set browser view 
+  elements[json.windowOptions.parentID].setBrowserView(elements[json.targetID])
+  if (typeof json.windowOptions.proxy !== 'undefined') {
+    elements[json.targetID].webContents.session.setProxy(json.windowOptions.proxy, function () {
+      windowViewCreateFinish(json)
+    })
+  } else {
+    windowViewCreateFinish(json)
+  }
+}
+
+// windowCreateFinish finishes creating a new window
+function windowViewCreateFinish (json) {
+  elements[json.targetID].webContents.loadURL(
+      json.url,
+      (typeof json.windowOptions.load !== 'undefined' 
+          ? json.windowOptions.load 
+          : {})
+  )
+  windowOrViewCreateFinish(json)
 }
 
 function registerCallback (json, k, e, n, c) {
