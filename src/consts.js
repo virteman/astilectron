@@ -103,6 +103,7 @@ module.exports = {
         windowEventDidFinishLoad: "window.event.did.finish.load",
         windowEventDidGetRedirectRequest: "window.event.did.get.redirect.request",
         windowEventWillNavigate: "window.event.will.navigate",
+        windowEventNewWindow: "window.event.newwindow",
         windowEventFocus: "window.event.focus",
         windowEventHide: "window.event.hide",
         windowEventMaximize: "window.event.maximize",

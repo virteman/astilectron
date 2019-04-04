@@ -424,6 +424,9 @@ function trayCreate (json) {
 
 // windowCreate creates a new window
 function windowCreate (json) {
+  if(typeof json.windowOptions.show ==  'undefined' ) {
+    json.windowOptions.show = false
+  }
   elements[json.targetID] = new BrowserWindow(json.windowOptions)
   if (typeof json.windowOptions.proxy !== 'undefined') {
     elements[json.targetID].webContents.session.setProxy(json.windowOptions.proxy, function () {
@@ -526,22 +529,24 @@ function windowOrViewCreateFinish (json) {
   // when new window( a link target _blank or window.open
   elements[json.targetID].webContents.on('new-window', (event, url) => {
     event.preventDefault()
+    client.write(json.targetID, consts.eventNames.windowEventNewWindow, {
+      "url": url
+    })
+      /*
     const win = new BrowserWindow({ show: false })
     win.once('ready-to-show', () => win.show())
     win.loadURL(url)
     event.newGuest = win
-    /*
-    client.write(json.targetID, consts.eventNames.windowEventWillNavigate, {
-      url: url
-    })
     */
   })
 }
 
 // windowCreateFinish finishes creating a new window
 function windowCreateFinish (json) {
-  elements[json.targetID].setMenu(null)
-  elements[json.targetID].loadURL(json.url, (typeof json.windowOptions.load !== 'undefined' ? json.windowOptions.load : {}))
+  elements[json.targetID].once('ready-to-show', () => { 
+    client.write(json.targetID, consts.eventNames.windowEventReadyToShow) 
+    elements[json.targetID].show()
+  })
   elements[json.targetID].on('blur', () => { client.write(json.targetID, consts.eventNames.windowEventBlur) })
   elements[json.targetID].on('close', (e) => {
     if (typeof json.windowOptions.custom !== 'undefined') {
@@ -583,12 +588,13 @@ function windowCreateFinish (json) {
           }
       })
   })
-  elements[json.targetID].on('ready-to-show', () => { client.write(json.targetID, consts.eventNames.windowEventReadyToShow) })
   elements[json.targetID].on('resize', () => { client.write(json.targetID, consts.eventNames.windowEventResize) })
   elements[json.targetID].on('restore', () => { client.write(json.targetID, consts.eventNames.windowEventRestore) })
   elements[json.targetID].on('show', () => { client.write(json.targetID, consts.eventNames.windowEventShow) })
   elements[json.targetID].on('unmaximize', () => { client.write(json.targetID, consts.eventNames.windowEventUnmaximize) })
   elements[json.targetID].on('unresponsive', () => { client.write(json.targetID, consts.eventNames.windowEventUnresponsive) })
+  elements[json.targetID].setMenu(null)
+  elements[json.targetID].loadURL(json.url, (typeof json.windowOptions.load !== 'undefined' ? json.windowOptions.load : {}))
   //
   windowOrViewCreateFinish(json)
   lastWindow = elements[json.targetID]
