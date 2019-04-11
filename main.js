@@ -80,6 +80,10 @@ app.on('ready', () => {
 
   // Read from client
   rl.on('line', function (line) {
+    if (!client.hsok) {
+        client.handshake(line)
+        return
+    }
     // Parse the JSON
     let json = JSON.parse(line)
 
