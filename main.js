@@ -78,6 +78,7 @@ app.on('ready', () => {
     client.write(arg.targetID, consts.eventNames.windowEventMessageCallback, payload)
   })
 
+
   // Read from client
   rl.on('line', function (line) {
     if (!client.hsok) {
@@ -335,17 +336,23 @@ app.on('ready', () => {
         break
     }
   })
-
-  // Send electron.ready event
-  client.write(consts.targetIds.app, consts.eventNames.appEventReady, {
-    displays: {
-      all: screen.getAllDisplays(),
-      primary: screen.getPrimaryDisplay()
-    },
-    supported: {
-      notification: Notification.isSupported()
+  var onceReady = function() {
+     // Send electron.ready event
+     client.write(consts.targetIds.app, consts.eventNames.appEventReady, {
+       displays: {
+         all: screen.getAllDisplays(),
+         primary: screen.getPrimaryDisplay()
+       },
+       supported: {
+         notification: Notification.isSupported()
+       }
+     })
+  }
+  var readyTimer = setInterval(function() {
+    if (client.hsok) {
+      onceReady()
     }
-  })
+  }, 10 )
 })
 
 // menuCreate creates a new menu
