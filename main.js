@@ -336,9 +336,9 @@ app.on('ready', () => {
         break
     }
   })
-  var onceReady = function() {
+  client.once(consts.eventNames.appEventReady, function(appid) {
      // Send electron.ready event
-     client.write(consts.targetIds.app, consts.eventNames.appEventReady, {
+     client.write(appid, consts.eventNames.appEventReady, {
        displays: {
          all: screen.getAllDisplays(),
          primary: screen.getPrimaryDisplay()
@@ -347,12 +347,7 @@ app.on('ready', () => {
          notification: Notification.isSupported()
        }
      })
-  }
-  var readyTimer = setInterval(function() {
-    if (client.hsok) {
-      onceReady()
-    }
-  }, 10 )
+  })
 })
 
 // menuCreate creates a new menu

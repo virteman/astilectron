@@ -1,5 +1,8 @@
 'use strict'
 
+const APP_ID = 'app'
+const HANDSHAKE = 'NIHAO'
+
 module.exports = {
     callbackNames: {
         webContentsLogin: "web.contents.login",
@@ -124,7 +127,11 @@ module.exports = {
         windowEventUnresponsive: "window.event.unresponsive"
     },
     targetIds: {
-        app: 'app',
-        dock: 'dock'
-    }
+        app: APP_ID,
+        dock: 'dock',
+    },
+    handshake: {
+        nihaoAck: HANDSHAKE,
+        nihao: HANDSHAKE + ':' + APP_ID + '\n',
+    },
 }

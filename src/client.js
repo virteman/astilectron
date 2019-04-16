@@ -3,6 +3,7 @@
 const net = require('net');
 const url = require('url');
 const consts = require('./consts.js')
+const EventEmitter = require('events').EventEmitter;
 
 // Client can read/write messages from a TCP server
 class Client {
@@ -22,12 +23,14 @@ class Client {
         return this
     }
     handshake(d) {
-        if( this.hsok || "NIHAO" == d){
+        if( this.hsok || consts.handshake.nihaoAck == d){
             this.hsok = true
+            // send appEventReady 
+            this.emit(consts.eventNames.appEventReady, consts.targetIds.app)
             return
         }
         if (this.hsCounts-- > 0) {
-            this.socket.write("NIHAO:"+consts.targetIds.app+"\n")
+            this.socket.write(consts.handshake.nihao)
         }
     }
     // write writes an event to the server
@@ -38,4 +41,6 @@ class Client {
     }
 }
 
+// inherits the event emitter
+require('util').inherits(Client, EventEmitter);
 module.exports = new Client()
