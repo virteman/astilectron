@@ -1,4 +1,4 @@
-'use strict'
+"use strict";
 
 const net = require('net');
 const url = require('url');
@@ -8,8 +8,8 @@ const EventEmitter = require('events').EventEmitter;
 // Client can read/write messages from a TCP server
 class Client {
     // init initializes the Client
-    init() {
-        let u = url.parse("tcp://" + process.argv[2], false, false)
+    init(addr) {
+        let u = url.parse("tcp://" + addr, false, false);
         this.socket = new net.Socket()
         this.hsok = false
         //try handshake counts limit

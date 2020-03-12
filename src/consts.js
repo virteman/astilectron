@@ -96,6 +96,7 @@ module.exports = {
         windowCmdSetBounds: "window.cmd.setbounds",
         windowCmdSetAutoResize: "window.cmd.setautoresize",
         windowCmdGetBounds: "window.cmd.getbounds",
+        windowCmdSetBounds: "window.cmd.set.bounds",
         windowCmdRestore: "window.cmd.restore",
         windowCmdShow: "window.cmd.show",
         windowCmdUnmaximize: "window.cmd.unmaximize",
