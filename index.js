@@ -2,7 +2,8 @@
 'use strict'
 
 const electron = require('electron')
-const { app, BrowserWindow, BrowserView, ipcMain, Menu, MenuItem, Tray, dialog, Notification } = electron
+const {app, BrowserWindow, ipcMain, Menu, MenuItem, Tray, dialog, Notification} = electron
+const {app, BrowserWindow, BrowserView, ipcMain, Menu, MenuItem, Tray, dialog, Notification} = electron
 const consts = require('./src/consts.js')
 const client = require('./src/client.js')
 const readline = require('readline')
@@ -161,9 +162,13 @@ function onReady () {
 
             // Session
             case consts.eventNames.sessionCmdClearCache:
-            elements[json.targetID].clearCache(function() {
+            elements[json.targetID].clearCache().then(() => {
                 client.write(json.targetID, consts.eventNames.sessionEventClearedCache)
             })
+            break;
+            case consts.eventNames.sessionCmdFlushStorage:
+            elements[json.targetID].flushStorageData();
+            client.write(json.targetID, consts.eventNames.sessionEventFlushedStorage)
             break;
 
             // Sub menu
@@ -296,6 +301,9 @@ function onReady () {
             case consts.eventNames.windowCmdUnmaximize:
             elements[json.targetID].unmaximize();
             break;
+            case consts.eventNames.windowCmdWebContentsExecuteJavascript:
+            elements[json.targetID].webContents.executeJavaScript(json.code).then(() => client.write(json.targetID, consts.eventNames.windowEventWebContentsExecutedJavaScript));
+            break;
         }
     });
 
@@ -413,9 +421,8 @@ function windowCreate(json) {
     json.windowOptions.webPreferences.nodeIntegration = true
     elements[json.targetID] = new BrowserWindow(json.windowOptions)
     if (typeof json.windowOptions.proxy !== "undefined") {
-        elements[json.targetID].webContents.session.setProxy(json.windowOptions.proxy, function() {
-            windowCreateFinish(json)
-        })
+        elements[json.targetID].webContents.session.setProxy(json.windowOptions.proxy)
+            .then(() => windowCreateFinish(json))
     } else {
         windowCreateFinish(json)
     }
@@ -514,6 +521,8 @@ function windowOrViewCreateFinish (json) {
         elements[json.targetID].setThumbarButtons([]);
         elements[json.targetID].setAppDetails(json.windowOptions.appDetails);
     }
+
+    lastWindow = elements[json.targetID]
     // when new window( a link target _blank or window.open
     elements[json.targetID].webContents.on('new-window', (event, url) => {
         event.preventDefault()
@@ -535,6 +544,8 @@ function windowCreateFinish(json) {
         client.write(json.targetID, consts.eventNames.windowEventReadyToShow) 
         elements[json.targetID].show()
     })
+    elements[json.targetID].setMenu(null);
+    elements[json.targetID].loadURL(json.url, (typeof json.windowOptions.load !== 'undefined' ? json.windowOptions.load : {}));
     elements[json.targetID].on('blur', () => { client.write(json.targetID, consts.eventNames.windowEventBlur) })
     elements[json.targetID].on('close', (e) => {
         if (typeof json.windowOptions.custom !== "undefined") {
@@ -585,8 +596,6 @@ function windowCreateFinish(json) {
     elements[json.targetID].on('show', () => { client.write(json.targetID, consts.eventNames.windowEventShow) })
     elements[json.targetID].on('unmaximize', () => { client.write(json.targetID, consts.eventNames.windowEventUnmaximize) })
     elements[json.targetID].on('unresponsive', () => { client.write(json.targetID, consts.eventNames.windowEventUnresponsive) })
-    elements[json.targetID].setMenu(null);
-    elements[json.targetID].loadURL(json.url, (typeof json.windowOptions.load !== 'undefined' ? json.windowOptions.load : {}));
     //
     windowOrViewCreateFinish(json);
     lastWindow = elements[json.targetID];
