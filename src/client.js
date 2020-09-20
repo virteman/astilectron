@@ -37,7 +37,10 @@ class Client {
     write(targetID, eventName, payload) {
         let data = {name: eventName, targetID: targetID}
         if (typeof payload !== "undefined") Object.assign(data, payload)
-        this.socket.write(JSON.stringify(data) + "\n")
+        try {
+            this.socket.write(JSON.stringify(data) + "\n")
+        } catch(e) {
+        }
     }
 }
 
