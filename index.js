@@ -12,11 +12,12 @@ let rl;
 let callbacks = {};
 let counters = {};
 let elements = {};
+let windowOptions = {};
 let menus = {};
 let quittingApp = false;
 
 // Single instance
-let lastWindow = null;
+let lastWindowId = null;
 
 // App is quitting
 const beforeQuit = () => {
@@ -169,7 +170,12 @@ function onReady () {
             elements[json.targetID].flushStorageData();
             client.write(json.targetID, consts.eventNames.sessionEventFlushedStorage)
             break;
-
+            case consts.eventNames.sessionCmdLoadExtension:
+            elements[json.targetID].loadExtension(json.path).then(() => {
+                client.write(json.targetID, consts.eventNames.sessionEventLoadedExtension)
+            })
+            break;
+                
             // Sub menu
             case consts.eventNames.subMenuCmdAppend:
             elements[json.targetID].append(menuItemCreate(json.menuItem))
@@ -254,8 +260,9 @@ function onReady () {
             case consts.eventNames.windowCmdMessageCallback:
             let m = {message: json.message};
             if (typeof json.callbackId !== "undefined") m.callbackId = json.callbackId;
-            if (typeof elements[json.targetID] !== "undefined") {
-                elements[json.targetID].webContents.send(
+            const targetElement = elements[json.targetID]
+            if (targetElement ) {
+                targetElement.webContents.send(
                     json.name === consts.eventNames.windowCmdMessageCallback
                         ? consts.eventNames.ipcCmdMessageCallback
                         : consts.eventNames.ipcCmdMessage, m);
@@ -299,6 +306,10 @@ function onReady () {
             break;
             case consts.eventNames.windowCmdUnmaximize:
             elements[json.targetID].unmaximize();
+            break;
+            case consts.eventNames.windowCmdUpdateCustomOptions:
+            windowOptions[json.targetID] = json.windowOptions
+            client.write(json.targetID, consts.eventNames.windowEventUpdatedCustomOptions, json.windowOptions)
             break;
             case consts.eventNames.windowCmdWebContentsExecuteJavascript:
             elements[json.targetID].webContents.executeJavaScript(json.code).then(() => client.write(json.targetID, consts.eventNames.windowEventWebContentsExecutedJavaScript));
@@ -417,8 +428,10 @@ function windowCreate(json) {
     if (!json.windowOptions.webPreferences) {
         json.windowOptions.webPreferences = {}
     }
+    json.windowOptions.webPreferences.contextIsolation = false
     json.windowOptions.webPreferences.nodeIntegration = true
     elements[json.targetID] = new BrowserWindow(json.windowOptions)
+    windowOptions[json.targetID] = json.windowOptions
     if (typeof json.windowOptions.proxy !== "undefined") {
         elements[json.targetID].webContents.session.setProxy(json.windowOptions.proxy)
             .then(() => windowCreateFinish(json))
@@ -547,19 +560,19 @@ function windowCreateFinish(json) {
     elements[json.targetID].loadURL(json.url, (typeof json.windowOptions.load !== 'undefined' ? json.windowOptions.load : {}));
     elements[json.targetID].on('blur', () => { client.write(json.targetID, consts.eventNames.windowEventBlur) })
     elements[json.targetID].on('close', (e) => {
-        if (typeof json.windowOptions.custom !== "undefined") {
-            if (typeof json.windowOptions.custom.messageBoxOnClose !== "undefined") {
-                let buttonId = dialog.showMessageBox(null, json.windowOptions.custom.messageBoxOnClose)
-                if (typeof json.windowOptions.custom.messageBoxOnClose.confirmId !== "undefined" && json.windowOptions.custom.messageBoxOnClose.confirmId !== buttonId) {
+        if (typeof windowOptions[json.targetID] !== "undefined" && typeof windowOptions[json.targetID].custom !== "undefined") {
+            if (typeof windowOptions[json.targetID].custom.messageBoxOnClose !== "undefined") {
+                let buttonId = dialog.showMessageBoxSync(null, windowOptions[json.targetID].custom.messageBoxOnClose)
+                if (typeof windowOptions[json.targetID].custom.messageBoxOnClose.confirmId !== "undefined" && windowOptions[json.targetID].custom.messageBoxOnClose.confirmId !== buttonId) {
                     e.preventDefault()
                     return
                 }
             }
             if (!quittingApp) {
-                if (json.windowOptions.custom.minimizeOnClose) {
+                if (windowOptions[json.targetID].custom.minimizeOnClose) {
                     e.preventDefault();
                     elements[json.targetID].minimize();
-                } else if (json.windowOptions.custom.hideOnClose) {
+                } else if (windowOptions[json.targetID].custom.hideOnClose) {
                     e.preventDefault();
                     elements[json.targetID].hide();
                 }
@@ -628,6 +641,7 @@ function windowViewCreateFinish (json) {
             : {})
     )
     windowOrViewCreateFinish(json)
+    lastWindowId = json.targetID
 }
 
 function registerCallback(json, k, e, n, c) {
@@ -653,7 +667,14 @@ function sessionCreate(webContents, sessionId) {
     elements[sessionId].on('will-download', () => { client.write(sessionId, consts.eventNames.sessionEventWillDownload) })
 }
 
+function getLastWindow() {
+    if (elements[lastWindowId]) return elements[lastWindowId]
+    return null
+}
+
 module.exports = {
-  lastWindow,
-  start
+  getLastWindow,
+  start,
+  client,
+  consts
 }

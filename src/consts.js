@@ -11,6 +11,7 @@ module.exports = {
     eventNames: {
         appCmdQuit: "app.cmd.quit",
         appEventReady: "app.event.ready",
+        appEventSecondInstance: "app.event.second.instance",
         displayEventAdded: "display.event.added",
         displayEventMetricsChanged: "display.event.metrics.changed",
         displayEventRemoved: "display.event.removed",
@@ -56,9 +57,11 @@ module.exports = {
         notificationEventShown: "notification.event.shown",
         sessionCmdClearCache: "session.cmd.clear.cache",
         sessionCmdFlushStorage: "session.cmd.flush.storage",
+        sessionCmdLoadExtension: "session.cmd.load.extension",
         sessionEventClearedCache: "session.event.cleared.cache",
         sessionEventWillDownload: "session.event.will.download",
         sessionEventFlushedStorage: "session.event.flushed.storage",
+        sessionEventLoadedExtension: "session.event.loaded.extension",
         subMenuCmdAppend: "sub.menu.cmd.append",
         subMenuCmdClosePopup: "sub.menu.cmd.close.popup",
         subMenuCmdInsert: "sub.menu.cmd.insert",
@@ -102,6 +105,7 @@ module.exports = {
         windowCmdRestore: "window.cmd.restore",
         windowCmdShow: "window.cmd.show",
         windowCmdUnmaximize: "window.cmd.unmaximize",
+        windowCmdUpdateCustomOptions: "window.cmd.update.custom.options",
         windowCmdWebContentsCloseDevTools: "window.cmd.web.contents.close.dev.tools",
         windowCmdWebContentsOpenDevTools: "window.cmd.web.contents.open.dev.tools",
         windowCmdWebContentsExecuteJavascript: "window.cmd.web.contents.execute.javascript",
@@ -129,7 +133,8 @@ module.exports = {
         windowEventShow: "window.event.show",
         windowEventUnmaximize: "window.event.unmaximize",
         windowEventUnresponsive: "window.event.unresponsive",
-        windowEventWebContentsExecutedJavaScript: "window.event.web.contents.executed.javascript"
+        windowEventWebContentsExecutedJavaScript: "window.event.web.contents.executed.javascript",
+        windowEventUpdatedCustomOptions: "window.event.updated.custom.options"
     },
     targetIds: {
         app: APP_ID,
